@@ -192,7 +192,7 @@ class BookingGateway
             }
             return ["success" => true];
         } else {
-            return ["error" => "Wrong id"]; 
+            return ["error" => "Wrong id. That class doesn't exist."]; 
         }
     }
 

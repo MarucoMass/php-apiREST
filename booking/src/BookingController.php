@@ -24,10 +24,10 @@ class BookingController
                 $canDelete = $this->gateway->canDeleteClass($id);
                 if (isset($canDelete["success"])) {
                     $this->gateway->deleteClass($id);
-                    http_response_code(200);
+                    http_response_code(204);
                     echo "Reservation deleted.";
                 } else {
-                    http_response_code(422);
+                    http_response_code(400);
                     echo $canDelete["error"];
                 }
                 break;
@@ -43,6 +43,7 @@ class BookingController
             case 'GET':
                 $data = $this->gateway->getAll();
                 if($data){
+                    http_response_code(200);
                     echo json_encode($data);
                 } else {
                     http_response_code(404);
@@ -51,9 +52,15 @@ class BookingController
             case 'POST':
                 $data = json_decode(file_get_contents("php://input"), true);
 
-                if ($this->validateDate($data)) {
+                $dataValidation = $this->validateData($data);
 
-                    $checkedData = $this->gateway->verifyAndFetch($data);
+                if (!isset($dataValidation["success"])) {
+                    http_response_code(400);
+                    echo $dataValidation["error"];
+                    return;
+                } 
+
+                $checkedData = $this->gateway->verifyAndFetch($data);
 
                     if(is_array($checkedData) && empty($checkedData["error"])){
                         $this->gateway->bookClass($checkedData);
@@ -64,10 +71,7 @@ class BookingController
                         http_response_code(422);
                         echo $checkedData["error"];
                     }
-                } else {
-                    http_response_code(422);
-                    echo "Please enter a date that does not exceed one month from today";
-                }
+               
                 break;
             default:
                 http_response_code(405);
@@ -75,12 +79,19 @@ class BookingController
         }
     }
 
-    private function validateDate(array $data):bool 
+    private function validateData(array $data):array
     {
+        if (empty($data["id"]) || empty($data["booked_by"]) || empty($data["date"])) {
+            return ["error" => "Please complete the require fields"];
+        }
+
         $selectedDate = new DateTime($data["date"]);
         $currentDate = new DateTime();
         $limitDate = $currentDate->add(new DateInterval('P1M'));
 
-        return $selectedDate <= $limitDate;
+        if ($selectedDate > $limitDate) {
+            return ["error" => "Please enter a date that does not exceed one month from today"];
+        }
+        return ["success" => "Data is validate"];
     }
 }
