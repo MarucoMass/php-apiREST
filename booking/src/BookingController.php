@@ -24,10 +24,10 @@ class BookingController
                 $canDelete = $this->gateway->canDeleteClass($id);
                 if (isset($canDelete["success"])) {
                     $this->gateway->deleteClass($id);
-                    http_response_code(204);
+                    http_response_code(200);
                     echo "Reservation deleted.";
                 } else {
-                    http_response_code(400);
+                    http_response_code(422);
                     echo $canDelete["error"];
                 }
                 break;
@@ -43,7 +43,6 @@ class BookingController
             case 'GET':
                 $data = $this->gateway->getAll();
                 if($data){
-                    http_response_code(200);
                     echo json_encode($data);
                 } else {
                     http_response_code(404);
@@ -55,7 +54,7 @@ class BookingController
                 $dataValidation = $this->validateData($data);
 
                 if (!isset($dataValidation["success"])) {
-                    http_response_code(400);
+                    http_response_code(422);
                     echo $dataValidation["error"];
                     return;
                 } 
@@ -87,10 +86,14 @@ class BookingController
 
         $selectedDate = new DateTime($data["date"]);
         $currentDate = new DateTime();
-        $limitDate = $currentDate->add(new DateInterval('P1M'));
+        $limitDate = (clone $currentDate)->add(new DateInterval('P1M')); 
 
         if ($selectedDate > $limitDate) {
             return ["error" => "Please enter a date that does not exceed one month from today"];
+        }
+        if ($selectedDate < $currentDate)
+        {
+            return ["error" => "Please enter a date that is from today"];
         }
         return ["success" => "Data is validate"];
     }

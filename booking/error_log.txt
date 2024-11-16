@@ -1,1 +1,12 @@
 
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:139 2024-11-16 06:38:33
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:139 2024-11-16 06:38:36
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:139 2024-11-16 06:38:37
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:131 2024-11-16 06:40:43
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:131 2024-11-16 06:40:44
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:131 2024-11-16 06:41:00
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:131 2024-11-16 06:41:01
+Error: [2] Undefined array key "current_bookings" - C:\xampp\htdocs\booking\src\BookingGateway.php:131 2024-11-16 06:42:18
+Error: [2] Trying to access array offset on value of type bool - C:\xampp\htdocs\booking\src\BookingGateway.php:117 2024-11-16 06:47:49
+Error: [2] Trying to access array offset on value of type bool - C:\xampp\htdocs\booking\src\BookingGateway.php:116 2024-11-16 06:48:12
+Error: [2] Trying to access array offset on value of type bool - C:\xampp\htdocs\booking\src\BookingGateway.php:116 2024-11-16 06:48:13

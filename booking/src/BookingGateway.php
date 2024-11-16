@@ -17,7 +17,20 @@ class BookingGateway
             t.day_of_week,
             t.start_time,
             t.end_time,
-            c.capacity_per_class
+             c.capacity_per_class,
+        (
+            SELECT COUNT(*) 
+            FROM bookings b
+            WHERE b.classroom_id = t.classroom_id
+            AND b.date >= CURDATE() 
+              AND (
+                  (b.date = CURDATE() AND b.start_time >= CURTIME()) 
+                  OR b.date > CURDATE() 
+              )
+              AND b.start_time < t.end_time 
+              AND b.end_time > t.start_time
+              AND b.day_of_week = t.day_of_week
+        ) AS current_bookings
             FROM 
                 classrooms c
             JOIN 
@@ -57,93 +70,126 @@ class BookingGateway
 
         $result = $stmt->fetch(PDO::FETCH_ASSOC);
 
-        return $result ? $result : false;
+        if (!$result) {
+            return ["error" => "The provided ID does not match any existing timetable."];
+        }
+
+        return $result;
     }
 
-    public function checkOverlap(array $data): bool
+    public function checkOverlap(array $data): bool|array
     {
+        // $query = "SELECT 
+        // t.classroom_id, 
+        // c.name, 
+        // t.start_time, 
+        // t.end_time, 
+        // t.day_of_week, 
+        // :date AS date, 
+        // :booked_by AS booked_by
+        // FROM timetables t
+        // JOIN classrooms c ON t.classroom_id = c.id
+        // WHERE t.id = :id
+        // AND NOT EXISTS (
+        //         SELECT 1
+        //         FROM bookings b
+        //         WHERE b.booked_by = :booked_by
+        //             AND b.date = :date
+        //             AND (
+        //                 (b.start_time < t.end_time AND b.end_time > t.start_time)
+        //             )
+        //     )
+        // AND DAYNAME(:date) = t.day_of_week;";
+
         $query = "SELECT 
-        t.classroom_id, 
-        c.name, 
-        t.start_time, 
-        t.end_time, 
-        t.day_of_week, 
-        :date AS date, 
-        :booked_by AS booked_by
-        FROM timetables t
-        JOIN classrooms c ON t.classroom_id = c.id
+        b.start_time, 
+        b.end_time, 
+        b.date, 
+        b.booked_by
+        FROM bookings b
+        JOIN timetables t ON b.classroom_id = t.classroom_id
         WHERE t.id = :id
-        AND NOT EXISTS (
-                SELECT 1
-                FROM bookings b
-                WHERE b.booked_by = :booked_by
-                    AND b.date = :date
-                    AND (
-                        (b.start_time < t.end_time AND b.end_time > t.start_time)
-                    )
-            )
+          AND b.date = :date
+          AND b.booked_by = :booked_by
+          AND (
+            b.start_time < t.end_time AND b.end_time > t.start_time
+          )
         AND DAYNAME(:date) = t.day_of_week;";
 
         $stmt = $this->conn->prepare($query);
         $stmt->bindValue(":booked_by", $data["booked_by"]);
         $stmt->bindValue(":date", $data["date"]);
         $stmt->bindValue(":id", $data["id"]);
-
         $stmt->execute();
 
-        return $stmt->fetchColumn() !== false;
+        $conflict = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($conflict) {
+            return [
+                "error" => "Conflict detected: overlapping booking from "
+                . $conflict['start_time'] . " to " . $conflict['end_time']
+                    . " by " . $conflict['booked_by'] . "."
+            ];
+        }
+
+        return true;
+        
     }
 
-    public function checkCapacity(array $data): bool
+
+    public function checkCapacity(array $data): bool|array
     {
         $query = "SELECT 
-        t.classroom_id, 
-        c.name, 
-        t.start_time, 
-        t.end_time, 
-        t.day_of_week, 
-        :date AS date, 
-        :booked_by AS booked_by
+        c.capacity_per_class,
+        (SELECT COUNT(*) 
+         FROM bookings b
+         WHERE b.date = :date
+           AND b.classroom_id = t.classroom_id
+           AND b.start_time < t.end_time
+           AND b.end_time > t.start_time) AS current_bookings
         FROM timetables t
-        JOIN classrooms c ON t.classroom_id = c.id
-        WHERE t.id = :id
-        AND (
-            (SELECT COUNT(*) 
-            FROM bookings b
-            WHERE b.date = :date
-                AND b.classroom_id = t.classroom_id
-                AND b.start_time < t.end_time
-                AND b.end_time > t.start_time) < c.capacity_per_class
-        );";
+        JOIN classrooms c ON c.id = t.classroom_id
+        WHERE t.id = :id;";
 
         $stmt = $this->conn->prepare($query);
-        $stmt->bindValue(":booked_by", $data["booked_by"]);
-        $stmt->bindValue(":date", $data["date"]);
         $stmt->bindValue(":id", $data["id"]);
-
+        $stmt->bindValue(":date", $data["date"]);
         $stmt->execute();
 
-        return $stmt->fetchColumn() !== false;
+        $capacity = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$capacity || !isset($capacity['current_bookings'])) {
+            return ["error" => "The classroom associated with this timetable does not exist or cannot be determined."];
+        }
+
+        if ($capacity['current_bookings'] >= $capacity['capacity_per_class']) {
+            return [
+                "error" => "The classroom is already at full capacity ("
+                . $capacity['current_bookings'] . "/" . $capacity['capacity_per_class'] . ")."
+            ];
+        }
+
+        return true;
     }
+
 
     public function verifyAndFetch(array $data): array|bool
     {
 
         $idResult = $this->checkId($data);
-        if (!$idResult) {
-            return ["error" => "Invalid ID"]; 
+        if (isset($idResult['error'])) {
+            return $idResult;
         }
 
         $overlapResult = $this->checkOverlap($data);
-        if (!$overlapResult) {
-            return ["error" => "Reservation conflict"]; 
+        if (isset($overlapResult['error'])) {
+            return $overlapResult;
         }
 
         $capacityResult = $this->checkCapacity($data);
-        if (!$capacityResult) {
-            return ["error" => "Capacity exceeded"]; 
+        if (isset($capacityResult['error'])) {
+            return $capacityResult;
         }
-
         return [
             "classroom_id" => $idResult["classroom_id"],
             "name" => $idResult["name"],
@@ -192,7 +238,7 @@ class BookingGateway
             }
             return ["success" => true];
         } else {
-            return ["error" => "Wrong id. That class doesn't exist."]; 
+            return ["error" => "Wrong id"]; 
         }
     }
 
